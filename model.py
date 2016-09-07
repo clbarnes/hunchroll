@@ -1,3 +1,5 @@
+"""In Jovanic & Schneider-Mizell et. al. (2016), behaviour selection was modelled. This is that model."""
+
 import numpy as np
 from scipy import integrate
 from matplotlib import pyplot as plt
@@ -39,6 +41,12 @@ r = [0, 0, 0, 0, 0, 0]  # current rate
 
 
 def constrain(constraints):
+    """
+    Constrains the decorated ODE of the form f(t, y, *args, **kwargs) such that the dependent variable y does not
+    significantly exceed the given arguments.
+
+    :param constraints: tuple of (lower, upper) constraint for all dependent variables
+    """
     if all(constraint is not None for constraint in constraints):
         assert constraints[0] < constraints[1]
 
@@ -55,13 +63,13 @@ def constrain(constraints):
             too_low = y <= lower
             too_high = y >= upper
 
-            y = np.maximum(y, np.ones(np.shape(y))*lower)
-            y = np.minimum(y, np.ones(np.shape(y))*upper)
+            y = np.maximum(y, np.ones(np.shape(y)) * lower)
+            y = np.minimum(y, np.ones(np.shape(y)) * upper)
 
             result = f(t, y, *args, **kwargs)
 
-            result[too_low] = np.maximum(result[too_low], np.ones(too_low.sum())*lower)
-            result[too_high] = np.minimum(result[too_high], np.ones(too_high.sum())*upper)
+            result[too_low] = np.maximum(result[too_low], np.ones(too_low.sum()) * lower)
+            result[too_high] = np.minimum(result[too_high], np.ones(too_high.sum()) * upper)
 
             return result
 
@@ -70,11 +78,16 @@ def constrain(constraints):
     return wrap
 
 
-# @nonnegative
 @constrain((0, None))
 def f(t, r, *f_args):
-    # negatives = r < 0
-    # r = nonnegative(r)
+    """
+    Return dr/dt
+
+    :param t: int, the current time
+    :param r: array, the current activity levels
+    :param f_args: varargs, any other arguments which need to be included
+    :return: vector, dr/dt at the current time
+    """
     dr_dt = np.empty(np.shape(r))
     dr_dt[:] = np.nan
 
@@ -110,23 +123,33 @@ def f(t, r, *f_args):
 
     for i, r_i in enumerate(r):
         dr_dt[i] = (
-                        -V_0[i] - r_i + s[i]
-                        + (r_max[i] - r_i) * np.sum(A_ex[i, :] * r)
-                        - np.sum(A_in[i, :] * r)
+                       -V_0[i] - r_i + s[i]
+                       + (r_max[i] - r_i) * np.sum(A_ex[i, :] * r)
+                       - np.sum(A_in[i, :] * r)
                    ) / tau[i]
-
-    # dr_dt[negatives] = np.maximum(dr_dt[negatives], np.zeros(negatives.sum()))
-    # print(dr_dt)
 
     return dr_dt
 
 
 def f_(r, t, *f_args):
+    """
+    Invert r and t's argument positions for use with scipy.integrate.odeint
+    """
     return f(t, r, *f_args)
 
 
 class SimpleEulerSolver:
+    """
+    A simple implementation of a first-order Euler solver
+    """
     def __init__(self, f, init, t, *f_args):
+        """
+
+        :param f: function, dy/dt of form f(t, y, *f_args)
+        :param init: sequence, initial y values
+        :param t: vector, time values to be evaluated
+        :param f_args:
+        """
         self.f = f
         self.init = init
         self.t = t
@@ -138,9 +161,9 @@ class SimpleEulerSolver:
 
     def evaluate(self):
         for i, this_t in enumerate(self.t[1:], start=1):
-            tstep = this_t - self.t[i-1]
+            tstep = this_t - self.t[i - 1]
             dr_dt = self.f(this_t, self.y[i - 1], *self.f_args)
-            this_y = self.y[i-1, :] + dr_dt*tstep
+            this_y = self.y[i - 1, :] + dr_dt * tstep
 
             self.y[i, :] = this_y
 
@@ -148,7 +171,17 @@ class SimpleEulerSolver:
 
 
 class OdeintSolver:
+    """
+    A wrapper for scipy.integrate.odeint
+    """
     def __init__(self, f, init, t, *f_args, **kwargs):
+        """
+
+        :param f: function, dy/dt of form f(t, y, *f_args)
+        :param init: sequence, initial y values
+        :param t: vector, time values to be evaluated
+        :param f_args:
+        """
         self.f = f
         self.init = init
         self.t = t
@@ -166,7 +199,17 @@ class OdeintSolver:
 
 
 class SimpleRungeKuttaSolver:
+    """
+    A simple implementation of a 4th-order Runge-Kutta solver
+    """
     def __init__(self, f, init, t, *f_args):
+        """
+
+        :param f: function, dy/dt of form f(t, y, *f_args)
+        :param init: sequence, initial y values
+        :param t: vector, time values to be evaluated
+        :param f_args:
+        """
         self.f = f
         self.init = init
         self.t = t
@@ -178,14 +221,14 @@ class SimpleRungeKuttaSolver:
 
     def evaluate(self):
         for i, this_t in enumerate(self.t[1:], start=1):
-            tstep = this_t - self.t[i-1]
+            tstep = this_t - self.t[i - 1]
 
-            k1 = f(self.t[i-1], self.y[i-1], *self.f_args)
-            k2 = f(self.t[i-1] + tstep/2, self.y[i-1] + (tstep/2) * k1, *self.f_args)
-            k3 = f(self.t[i-1] + tstep/2, self.y[i-1] + (tstep/2) * k2, *self.f_args)
-            k4 = f(self.t[i-1] + tstep, self.y[i-1] + tstep*k3, *self.f_args)
+            k1 = f(self.t[i - 1], self.y[i - 1], *self.f_args)
+            k2 = f(self.t[i - 1] + tstep / 2, self.y[i - 1] + (tstep / 2) * k1, *self.f_args)
+            k3 = f(self.t[i - 1] + tstep / 2, self.y[i - 1] + (tstep / 2) * k2, *self.f_args)
+            k4 = f(self.t[i - 1] + tstep, self.y[i - 1] + tstep * k3, *self.f_args)
 
-            this_y = self.y[i-1, :] + (tstep/6) * (k1 + 2*k2 + 2*k3 + k4)
+            this_y = self.y[i - 1, :] + (tstep / 6) * (k1 + 2 * k2 + 2 * k3 + k4)
 
             self.y[i, :] = this_y
 
@@ -204,8 +247,8 @@ def get_response(r):
     r2_max = R2_MAX
     r3_max = R3_MAX
 
-    r2_hat = r[1]/r2_max
-    r3_hat = r[2]/r3_max
+    r2_hat = r[1] / r2_max
+    r3_hat = r[2] / r3_max
     if r2_hat <= 0.5 and r3_hat <= 0.5:
         return 0  # no response
     if r3_hat < 0.3 and (r2_hat > 0.5 or r3_hat > 0.5):  # 3rd term is not possible given 1st?
@@ -215,6 +258,14 @@ def get_response(r):
 
 
 def single_solution(w_iLNb=w_iLNb_DEFAULT, w_iLNa=w_iLNa_DEFAULT):
+    """
+    Given values of the inhibitory Local Interneuron's weights (i.e. response to sensory input), calculate the evolution
+    of neuron activities in the circuit.
+
+    :param w_iLNb: float
+    :param w_iLNa: float
+    :return: tuple(1D array, 2D array), the time vector and array of activities at each time step
+    """
     t_0 = 0
     t_final = 200
     num_steps = NUM_STEPS
@@ -237,6 +288,14 @@ def single_solution(w_iLNb=w_iLNb_DEFAULT, w_iLNa=w_iLNa_DEFAULT):
 
 
 def plot_single_solution(t, r, show=True):
+    """
+    Plot neuron activities and behavioural response
+
+    :param t: 1D array, time values
+    :param r: 2D array, neuron activity at each time value
+    :param show: bool, whether to show plot
+    :return: fig
+    """
     responses = np.array([get_response(r_row) for r_row in r])
     hunches = responses == HUNCH
     bends = responses == BEND
@@ -259,26 +318,50 @@ def plot_single_solution(t, r, show=True):
 
 
 def get_trajectory(r):
+    """
+    From all neuron activities, get coincident activity of Basins 1 and 2
+
+    :param r: 2D array, neuron activities
+    :return: 2D array, Basin-1 activity vs Basin-2 activity
+    """
     return np.array([r[:, 1], r[:, 2]]).T
 
 
 def single_soln_tup(args):
+    """
+    Wrap single_solution to accept a tuple of arguments for parallelisation
+
+    :param args: tuple of arguments to single_solution
+    :return:
+    """
     return single_solution(*args)
 
 
 def get_trajectories():
+    """
+    For a range of inhibitory Local interNeuron weights, determine the trajectory of Basin-1 and Basin-2 activities.
+
+    :return: list of trajectories
+    """
     ranges = (0.5, 1.5)
     n = (15, 15)
 
     w_iLNs = list(product(np.linspace(ranges[0], ranges[1], n[0]), np.linspace(ranges[0], ranges[1], n[1])))
 
     with mp.Pool(mp.cpu_count()) as p:
-        solns = p.map(single_soln_tup, w_iLNs, chunksize=int(len(w_iLNs)/mp.cpu_count()))
+        solns = p.map(single_soln_tup, w_iLNs, chunksize=int(len(w_iLNs) / mp.cpu_count()))
 
     return [get_trajectory(r) for _, r in solns]
 
 
 def plot_trajectories(trajectories, show=True):
+    """
+    Plot the trajectories of Basin activity in state space
+
+    :param trajectories: list of trajectories
+    :param show: whether to show plot
+    :return: fig
+    """
     plt.figure()
     for traj in trajectories:
         plt.plot(traj[:, 0], traj[:, 1], color='k', alpha=0.1)
@@ -290,6 +373,9 @@ def plot_trajectories(trajectories, show=True):
 
 
 def save_trajs(trajs, fname='traj.gpickle'):
+    """
+    Pickle things
+    """
     with open(fname, 'wb') as f:
         pickle.dump(trajs, f)
 
@@ -298,33 +384,4 @@ if __name__ == '__main__':
     t, r = single_solution()
     plot_single_solution(t, r)
 
-    # trajs = get_trajectories()
-    # save_trajs(trajs)
-    #
-    # # with open('traj.gpickle', 'rb') as f:
-    # #     trajs = pickle.load(f)
-    #
-    # plot_trajectories(trajs)
-
-    # t_0 = 0
-    # t_final = 250
-    # num_steps = 1000
-    # r_init = [0, 0, 0, 0, 0, 0]
-    # solver = integrate.ode(f).set_integrator('vode', method='bdf')
-    # solver.set_initial_value(r_init, t_0)
-    #
-    # # Additional Python step: create vectors to store trajectories
-    # t = np.zeros((num_steps, 1))
-    # CA = np.zeros((num_steps, len(r_init)))
-    # t[0] = t_0
-    # CA[0] = r_init
-    #
-    # # Integrate the ODE(s) across each delta_t timestep
-    # k = 1
-    # while solver.successful() and k < num_steps:
-    #     solver.integrate(solver.t + t_final/num_steps)
-    #
-    #     # Store the results to plot later
-    #     t[k] = solver.t
-    #     CA[k] = solver.y[0]
-    #     k += 1
+    plot_trajectories(get_trajectories())
