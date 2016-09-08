@@ -47,8 +47,10 @@ def constrain(constraints):
 
     :param constraints: tuple of (lower, upper) constraint for all dependent variables
     """
-    if all(constraint is not None for constraint in constraints):
+    try:
         assert constraints[0] < constraints[1]
+    except TypeError:
+        pass
 
     def wrap(f):
 
